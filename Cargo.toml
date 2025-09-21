@@ -4,11 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-async-trait = "0.1"
-sha2 = "0.10"
+async-trait = "*"
+sha2 = "*"
 tracing = "*"
-thiserror = "2"
-chrono = { version = "0.4", features = ["serde"] }
-neo4rs = { version = "0.9.0-rc.8", features = ["json"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = { version = "1" }
+thiserror = "*"
+chrono = { version = "*", features = ["serde"] }
+neo4rs = { path = "../neo4rs/lib", version = "0.9.0-rc.8", features = ["json", "uuid"] }
+serde = { version = "*", features = ["derive"] }
+serde_json = { version = "*" }
