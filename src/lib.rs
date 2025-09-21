@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use neo4rs::{BoltType, Txn};
+use neo4rs::{BoltType, RowStream, Txn};
 use serde::{de::DeserializeOwned, Serialize};
 use sha2::Digest;
 
@@ -85,6 +85,8 @@ pub trait NeoQueryExt {
         self,
         tx: &mut Txn,
     ) -> Result<Vec<T>, neo4rs::Error>;
+
+    async fn execute_stream(self, tx: &mut Txn) -> Result<RowStream, neo4rs::Error>;
 }
 
 #[async_trait]
@@ -124,6 +126,11 @@ impl NeoQueryExt for neo4rs::Query {
         }
 
         Ok(output)
+    }
+
+    async fn execute_stream(self, tx: &mut Txn) -> Result<RowStream, neo4rs::Error> {
+        let stream = tx.execute(self).await?;
+        Ok(stream)
     }
 }
 
