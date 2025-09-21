@@ -74,6 +74,59 @@ impl NeoResultSet for neo4rs::RowStream {
     }
 }
 
+#[async_trait]
+pub trait NeoQueryExt {
+    async fn execute_value<T: DeserializeOwned>(
+        self,
+        tx: &mut Txn,
+    ) -> Result<Option<T>, neo4rs::Error>;
+
+    async fn execute_values<T: DeserializeOwned + Send>(
+        self,
+        tx: &mut Txn,
+    ) -> Result<Vec<T>, neo4rs::Error>;
+}
+
+#[async_trait]
+impl NeoQueryExt for neo4rs::Query {
+    async fn execute_value<T: DeserializeOwned>(
+        self,
+        tx: &mut Txn,
+    ) -> Result<Option<T>, neo4rs::Error> {
+        let mut stream = tx.execute(self).await?;
+
+        let row = stream.next(tx.handle()).await?;
+        if let Some(value) = row {
+            match value.to::<T>() {
+                Ok(val) => return Ok(Some(val)),
+                Err(err) => return Err(neo4rs::Error::DeserializationError(err)),
+            };
+        } else {
+            return Ok(None);
+        }
+    }
+
+    async fn execute_values<T: DeserializeOwned + Send>(
+        self,
+        tx: &mut Txn,
+    ) -> Result<Vec<T>, neo4rs::Error> {
+        let mut output = Vec::new();
+
+        let mut stream = tx.execute(self).await?;
+        while let Some(ref row) = stream.next(tx.handle()).await? {
+            match row.to::<T>() {
+                Ok(entry) => {
+                    let deserialized: T = entry;
+                    output.push(deserialized);
+                }
+                Err(err) => return Err(neo4rs::Error::DeserializationError(err)),
+            };
+        }
+
+        Ok(output)
+    }
+}
+
 /// Used to convert an instance of T into a parameterizable map of properties that neo4rs can use.
 pub fn parameterize<T: Serialize>(instance: T) -> BoltType {
     struct_to_hashmap(&instance).unwrap()
