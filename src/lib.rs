@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use neo4rs::{BoltType, RowStream, Txn};
+use neo4rs::{BoltType, Graph, RowStream, Txn};
 use serde::{de::DeserializeOwned, Serialize};
 use sha2::Digest;
 
@@ -78,10 +78,20 @@ impl NeoResultSet for neo4rs::RowStream {
 pub trait NeoQueryExt {
     async fn execute_value<T: DeserializeOwned>(
         self,
-        tx: &mut Txn,
+        graph: &Graph,
     ) -> Result<Option<T>, neo4rs::Error>;
 
     async fn execute_values<T: DeserializeOwned + Send>(
+        self,
+        graph: &Graph,
+    ) -> Result<Vec<T>, neo4rs::Error>;
+
+    async fn execute_value_tx<T: DeserializeOwned>(
+        self,
+        tx: &mut Txn,
+    ) -> Result<Option<T>, neo4rs::Error>;
+
+    async fn execute_values_tx<T: DeserializeOwned + Send>(
         self,
         tx: &mut Txn,
     ) -> Result<Vec<T>, neo4rs::Error>;
@@ -92,6 +102,42 @@ pub trait NeoQueryExt {
 #[async_trait]
 impl NeoQueryExt for neo4rs::Query {
     async fn execute_value<T: DeserializeOwned>(
+        self,
+        graph: &Graph,
+    ) -> Result<Option<T>, neo4rs::Error> {
+        let mut stream = graph.execute(self).await?;
+        let row = stream.next().await?;
+        if let Some(value) = row {
+            match value.to::<T>() {
+                Ok(val) => return Ok(Some(val)),
+                Err(err) => return Err(neo4rs::Error::DeserializationError(err)),
+            };
+        } else {
+            return Ok(None);
+        }
+    }
+
+    async fn execute_values<T: DeserializeOwned + Send>(
+        self,
+        graph: &Graph,
+    ) -> Result<Vec<T>, neo4rs::Error> {
+        let mut output = Vec::new();
+
+        let mut stream = graph.execute(self).await?;
+        while let Some(ref row) = stream.next().await? {
+            match row.to::<T>() {
+                Ok(entry) => {
+                    let deserialized: T = entry;
+                    output.push(deserialized);
+                }
+                Err(err) => return Err(neo4rs::Error::DeserializationError(err)),
+            };
+        }
+
+        Ok(output)
+    }
+
+    async fn execute_value_tx<T: DeserializeOwned>(
         self,
         tx: &mut Txn,
     ) -> Result<Option<T>, neo4rs::Error> {
@@ -108,7 +154,7 @@ impl NeoQueryExt for neo4rs::Query {
         }
     }
 
-    async fn execute_values<T: DeserializeOwned + Send>(
+    async fn execute_values_tx<T: DeserializeOwned + Send>(
         self,
         tx: &mut Txn,
     ) -> Result<Vec<T>, neo4rs::Error> {
