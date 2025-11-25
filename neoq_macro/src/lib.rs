@@ -1,6 +1,13 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, Data, DeriveInput, Fields};
+use syn::{Data, DeriveInput, Fields, parse_macro_input};
+
+mod cypher;
+
+#[proc_macro]
+pub fn cypher(input: TokenStream) -> TokenStream {
+    cypher::generate(input)
+}
 
 #[proc_macro_derive(IntoBoltType)]
 pub fn derive_into_bolttype(input: TokenStream) -> TokenStream {
