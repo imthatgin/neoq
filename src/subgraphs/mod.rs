@@ -44,8 +44,16 @@ impl Subgraph {
         self.nodes.values()
     }
 
+    pub fn nodes_raw(&self) -> HashMap<i64, Node> {
+        self.nodes.clone()
+    }
+
     pub fn relationships(&self) -> impl Iterator<Item = &Relation> {
         self.relations.values()
+    }
+
+    pub fn relationships_raw(&self) -> HashMap<i64, Relation> {
+        self.relations.clone()
     }
 
     pub fn from_rows(rows: impl IntoIterator<Item = Row>) -> Result<Self, neo4rs::DeError> {
