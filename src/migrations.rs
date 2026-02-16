@@ -7,7 +7,7 @@ use std::{
 };
 use tracing::{error, info};
 
-use crate::{NeoQueryExtGeneric, get_str_shasum, parameterize};
+use crate::{QueryExt, get_str_shasum, parameterize};
 
 /// Represents a file migration discovered on disk.
 #[derive(Debug, Deserialize, Serialize, Clone)]

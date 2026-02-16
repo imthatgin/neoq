@@ -6,10 +6,11 @@ use crate::migrations::MigrationError;
 
 pub mod index_file;
 pub mod migrations;
-mod result_set;
-mod subgraphs;
 
-pub use result_set::*;
+mod executor;
+pub use executor::*;
+
+mod subgraphs;
 pub use subgraphs::*;
 
 #[derive(Debug, thiserror::Error)]
