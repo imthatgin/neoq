@@ -1,5 +1,5 @@
 use chrono::Utc;
-use neo4rs::{query, Database, Graph};
+use neo4rs::{Database, Graph, query};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -7,7 +7,7 @@ use std::{
 };
 use tracing::{error, info};
 
-use crate::{get_str_shasum, parameterize, NeoResultSet};
+use crate::{QueryExt, get_str_shasum, parameterize};
 
 /// Represents a file migration discovered on disk.
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -82,7 +82,7 @@ impl GraphMigrator {
         migration: &FileMigration,
     ) -> Result<(), MigrationError> {
         let existing = self
-            .get_existing_migration(db.clone(), driver.clone(), migration.file_name.as_str())
+            .get_existing_migration(driver.clone(), migration.file_name.as_str())
             .await?;
 
         if let Some(existing_migration) = existing {
@@ -106,7 +106,7 @@ impl GraphMigrator {
         Ok(())
     }
 
-    /// Actual migration in a transaction.
+    /// Creates the node representing the migration in addition to executing the migration itself.
     async fn create_migration_node(
         &self,
         counter: u64,
@@ -129,13 +129,12 @@ impl GraphMigrator {
             .param("migrationNode", parameterized_migration)
             .param("previousVersion", counter as i64);
 
-        tx.run(query(migration.cypher_text.as_str())).await?;
+        let migration_query = query(migration.cypher_text.as_str());
+
+        tx.run(migration_query).await?;
+        tx.run(migration_node_query).await?;
+
         tx.commit().await?;
-
-        let mut tx_migration_node = driver.start_txn_on(db.clone()).await?;
-
-        tx_migration_node.run(migration_node_query).await?;
-        tx_migration_node.commit().await?;
 
         Ok(None)
     }
@@ -143,40 +142,34 @@ impl GraphMigrator {
     /// Runs a query to look for a migration node with the same file name.
     async fn get_existing_migration(
         &self,
-        db: Database,
         driver: Graph,
         name: &str,
     ) -> Result<Option<MigrationsNode>, MigrationError> {
-        let mut tx = driver.start_txn_on(db.clone()).await?;
+        let query =
+            query("MATCH (m:DataModelMigration { file_name: $migration_file_name }) RETURN m")
+                .param("migration_file_name", name);
 
-        let q = query("MATCH (m:DataModelMigration { file_name: $migration_file_name }) RETURN m")
-            .param("migration_file_name", name);
-
-        let mut results = tx.execute(q).await?;
-
-        let execution_result = results.value(&mut tx).await;
-        match execution_result {
-            Ok(migration) => Ok(migration),
-            Err(err) => Err(err.into()),
-        }
+        let node = query.execute_value(driver).await?;
+        Ok(node)
     }
 
     /// Processes a single file and returns a `FileMigration` if it is a `.cyp`
     /// or `.cypher` file.
     fn process_file(&self, file_path: PathBuf) -> Option<FileMigration> {
-        if file_path.extension()? == "cyp" || file_path.extension()? == "cypher" {
-            let file_name = file_path.file_name()?.to_string_lossy().to_string();
-            let cypher_text = fs::read_to_string(&file_path).ok()?;
-            let checksum = get_str_shasum(&cypher_text);
-
-            Some(FileMigration {
-                checksum,
-                file_name,
-                cypher_text,
-            })
-        } else {
-            None
+        let extension = file_path.extension()?;
+        if extension != "cyp" && extension != "cypher" {
+            return None;
         }
+
+        let file_name = file_path.file_name()?.to_string_lossy().to_string();
+        let cypher_text = fs::read_to_string(&file_path).ok()?;
+        let checksum = get_str_shasum(&cypher_text);
+
+        Some(FileMigration {
+            checksum,
+            file_name,
+            cypher_text,
+        })
     }
 }
 

@@ -13,7 +13,7 @@ pub async fn update_indexes(
         "MATCH (metaNode:DbIndexTracker {shaSum: $currentSum}) RETURN metaNode.shaSum AS sum LIMIT 1",
     )
     .param("currentSum", sum.clone());
-    let mut current_index_hash = driver.execute_on(&db, current_index_query).await?;
+    let mut current_index_hash = driver.execute_on(db.clone(), current_index_query).await?;
 
     // If the query returns a sum, it means that it matches. Otherwise
     // we just need to
@@ -48,13 +48,13 @@ pub async fn update_indexes(
 async fn drop_indexes(driver: neo4rs::Graph, db: neo4rs::Database) -> Result<(), neo4rs::Error> {
     driver
         .run_on(
-            &db,
+            db.clone(),
             query("CALL apoc.schema.assert({},{},true) YIELD label, key RETURN *"),
         )
         .await?;
     driver
         .run_on(
-            &db,
+            db.clone(),
             query("MATCH (metaNode:DbIndexTracker) DETACH DELETE metaNode RETURN *"),
         )
         .await?;
@@ -75,13 +75,14 @@ async fn reindex_database(
     tracing::trace!("Sending index queries to db");
     let mut tx = driver.start_txn_on(db.clone()).await?;
     tx.run_queries(index_statements).await?;
+
     tx.commit().await?;
     tracing::trace!("Committed index query statements");
 
     let create_index_meta =
         query("CREATE (metaNode:DbIndexTracker {shaSum: $currentSum}) RETURN metaNode")
             .param("currentSum", index_sum.clone());
-    driver.run_on(&db, create_index_meta).await?;
+    driver.run_on(db.clone(), create_index_meta).await?;
 
     tracing::trace!(?index_sum, "Reindexing");
 
