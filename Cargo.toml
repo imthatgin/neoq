@@ -9,9 +9,6 @@ sha2 = "*"
 tracing = "*"
 thiserror = "*"
 chrono = { version = "*", features = ["serde"] }
-neo4rs = { git = "https://github.com/neo4j-labs/neo4rs", branch = "main", features = [
-    "json",
-    "uuid",
-] }
+neo4rs = { version = "0.9.0-rc.9", features = ["json", "uuid"] }
 serde = { version = "*", features = ["derive"] }
 serde_json = { version = "*" }
