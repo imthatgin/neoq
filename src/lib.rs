@@ -13,6 +13,9 @@ pub use executor::*;
 mod subgraphs;
 pub use subgraphs::*;
 
+mod queries;
+pub use queries::*;
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error(transparent)]
